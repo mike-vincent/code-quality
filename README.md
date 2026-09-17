@@ -94,32 +94,32 @@ The guard evaluates the repaired payload, returns **exit code 0**, and allows th
 
 ## Rules
 
-| File | Scope | Invariant (Scientific Term & Plain-English VOA Explanation) | Contract |
-| :--- | :--- | :--- | :--- |
-| `guard-banned-words.sh` | Single file | **Lexical Space Projection**<br>Stops the AI from using confusing UI jargon like `navbar`, `modal`, `card`, or `hero`. Forces the agent to use standard HTML words like `<nav>`, `<dialog>`, `row`, and `<header>`. | Exit 2 on violation; blocks tool payload. |
-| `guard-bash-write.sh` | Command | **Out-of-Band State Mutation Suppression**<br>Stops the AI from using shell commands like `sed -i` or redirects (`>`) to edit files. Forces the agent to use standard file tools so every change is tracked. | Exit 2 on violation; blocks shell execution. |
-| `guard-cloudflare-kv.sh` | Single file | **Unbounded Resource-Sink Mitigation**<br>Blocks the use of Cloudflare Workers KV storage. Cloudflare charges money for every write, so this stops the AI from creating expensive billing loops. | Exit 2 on violation; outputs cost diagnostic to stderr. |
-| `guard-deploy-push.sh` | Command | **Production Deployment Invariants**<br>Stops the AI from releasing uncommitted or unpushed code to production. All changes must be committed and pushed to the main branch first. | Exit 2 on unpushed or dirty working tree. |
-| `guard-diff-size.sh` | Command | **Generative Trajectory Drift Regularization**<br>Stops the AI agent from changing too many lines on one branch. It forces the agent to make small, clear steps instead of one giant rewrite. | Exit 2 if branch diff exceeds budget. |
-| `guard-direct-style.sh` | Single file | **Imperative DOM Mutation Suppression**<br>Blocks code that changes styles directly with JavaScript (`element.style.x =`). Forces the code to use clean CSS classes and design tokens instead. | Exit 2 on direct style property assignment. |
-| `guard-function-size.sh` | Single file | **Cognitive & Cyclomatic Complexity Ceiling**<br>Blocks functions that are longer than 50 lines. This keeps every function short, simple, and easy to test. | Exit 2 if function block length > 50 lines. |
-| `guard-max-lines.sh` | Single file | **Context-Window Saturation Bound**<br>Blocks any file that grows beyond 300 lines. Short files fit easily into the AI model's memory and keep code organized. | Exit 2 if target file exceeds 300 lines. |
-| `guard-morpheme-max.sh` | Single file | **Morphological Sparsity Ceiling**<br>Limits file names and exported function names to at most three words. Prevents the AI from creating overly long, complex names. | Exit 2 if basename or export > 3 morphemes. |
-| `guard-name-words.sh` | Single file | **Lexical Parsimony Ladder**<br>Warns authors when they create new files with multi-word names. Reinforces that one-word names are best and two words are fine. | Exit 0 with diagnostic advisory on stdout/stderr. |
-| `guard-pull-request.sh` | Command | **Falsifiable Task-Completion Verification**<br>Rejects pull requests that do not have a task checklist (`- [ ]`). Forces the AI or developer to state clearly what done means. | Exit 2 if PR description lacks criteria checkboxes. |
-| `guard-push-main.sh` | Command | **Default Branch Invariant Protection**<br>Blocks direct pushes to `main` or `master`. Forces developers and agents to use a branch and open a pull request. | Exit 2 if push targets default branch. |
-| `guard-url-version.sh` | Single file | **Protocol Versioning Conformance**<br>Blocks API version numbers inside URL paths like `/v1/`. Requires version numbers to live cleanly in HTTP headers instead. | Exit 2 if URL path contains version tokens. |
-| `hook-post-edit.sh` | Dispatcher | **PostToolUse Advisory Feedback**<br>Runs quick checks right after a file is edited. Gives the AI helpful advice on save without stopping its work. | Exit 0 with diagnostic advisory. |
-| `hook-pre-commit.sh` | Dispatcher | **Diff-Aware Commit Boundary Gate**<br>Runs checks on staged Git files before you commit. Blocks new errors without breaking older legacy code. | Exit 1 on staged violations; blocks git commit. |
-| `hook-pre-tool.sh` | Dispatcher | **PreToolUse Policy Interceptor**<br>Catches AI tool calls before they touch your disk. If a rule is broken, it stops the write and tells the AI why. | Exit 2 on invariant violation; passes stderr to context. |
-| `lint-banned-words.sh` | Batch | **Global Lexical Space Auditor**<br>Scans the whole project for banned UI framework words. Reports all files that need cleaner, standard terms. | Exit 1 on detected violations. |
-| `lint-dead-imports.sh` | Batch | **Static Dependency Graph Integrity**<br>Scans files for broken relative imports. Finds any import statement pointing to a file that does not exist. | Exit 1 on broken relative import paths. |
-| `lint-important-css.sh` | Batch | **Cascade Determinism Enforcement**<br>Scans style files and bans `!important`. Forces CSS styles to follow natural browser rules instead of forcing overrides. | Exit 1 on `!important` occurrences. |
-| `lint-max-lines.sh` | Batch | **Batch Context-Length Auditor**<br>Scans all files across the project. Flags any file that has grown beyond the 300-line limit. | Exit 1 if any file exceeds limit. |
-| `lint-morpheme-max.sh` | Batch | **Batch Morphological Auditor**<br>Scans all files and exports across the project. Flags any name that contains four or more words. | Exit 1 if violations found. |
-| `lint-naming.sh` | Branch | **Lexical Distribution Mode Verification**<br>Checks all files added by a branch. Ensures that three-word names do not become the most common naming pattern. | Exit 1 if 3-word names are strictly the mode. |
-| `lint-token-required.sh` | Batch | **Design Token Structural Indirection**<br>Ensures all CSS values use design tokens like `var(--*)`. Flags any hardcoded raw values like `#fff` or `16px`. | Exit 1 on raw styling literals. |
-| `lint-url-version.sh` | Batch | **Batch URI Architecture Validator**<br>Scans the project for version numbers hardcoded in URLs. Flags API routes using `/v1/` or `?version=`. | Exit 1 if URI versions detected. |
+| File | Description |
+|---|---|
+| `guard-banned-words.sh` | **Lexical Space Projection**: Stops the AI from using confusing UI jargon like `navbar`, `modal`, `card`, or `hero`. Forces the agent to use standard HTML words like `<nav>`, `<dialog>`, `row`, and `<header>`. |
+| `guard-bash-write.sh` | **Out-of-Band State Mutation Suppression**: Stops the AI from using shell commands like `sed -i` or redirects (`>`) to edit files. Forces the agent to use standard file tools so every change is tracked. |
+| `guard-cloudflare-kv.sh` | **Unbounded Resource-Sink Mitigation**: Blocks the use of Cloudflare Workers KV storage. Cloudflare charges money for every write, so this stops the AI from creating expensive billing loops. |
+| `guard-deploy-push.sh` | **Production Deployment Invariants**: Stops the AI from releasing uncommitted or unpushed code to production. All changes must be committed and pushed to the main branch first. |
+| `guard-diff-size.sh` | **Generative Trajectory Drift Regularization**: Stops the AI agent from changing too many lines on one branch. Forces small, safe steps instead of one giant rewrite. |
+| `guard-direct-style.sh` | **Imperative DOM Mutation Suppression**: Blocks code that changes styles directly with JavaScript (`element.style.x =`). Forces the code to use clean CSS classes and design tokens instead. |
+| `guard-function-size.sh` | **Cognitive & Cyclomatic Complexity Ceiling**: Blocks functions that are longer than 50 lines. Keeps every function short, simple, and easy to test. |
+| `guard-max-lines.sh` | **Context-Window Saturation Bound**: Blocks any file that grows beyond 300 lines. Short files fit easily into the AI model's memory and keep code organized. |
+| `guard-morpheme-max.sh` | **Morphological Sparsity Ceiling**: Limits file names and exported function names to at most three words. Prevents the AI from creating overly long, complex names. |
+| `guard-name-words.sh` | **Lexical Parsimony Ladder**: Warns authors when they create new files with multi-word names. Reinforces that one-word names are best and two words are fine. |
+| `guard-pull-request.sh` | **Falsifiable Task-Completion Verification**: Rejects pull requests that do not have a task checklist (`- [ ]`). Forces the AI or developer to state clearly what done means. |
+| `guard-push-main.sh` | **Default Branch Invariant Protection**: Blocks direct pushes to `main` or `master`. Forces developers and agents to use a branch and open a pull request. |
+| `guard-url-version.sh` | **Protocol Versioning Conformance**: Blocks API version numbers inside URL paths like `/v1/`. Requires version numbers to live cleanly in HTTP headers instead. |
+| `hook-post-edit.sh` | **PostToolUse Advisory Feedback**: Runs quick checks right after a file is edited. Gives the AI helpful advice on save without stopping its work. |
+| `hook-pre-commit.sh` | **Diff-Aware Commit Boundary Gate**: Runs checks on staged Git files before you commit. Blocks new errors without breaking older legacy code. |
+| `hook-pre-tool.sh` | **PreToolUse Policy Interceptor**: Catches AI tool calls before they touch your disk. If a rule is broken, it stops the write and tells the AI why. |
+| `lint-banned-words.sh` | **Global Lexical Space Auditor**: Scans the whole project for banned UI framework words. Reports all files that need cleaner, standard terms. |
+| `lint-dead-imports.sh` | **Static Dependency Graph Integrity**: Scans files for broken relative imports. Finds any import statement pointing to a file that does not exist. |
+| `lint-important-css.sh` | **Cascade Determinism Enforcement**: Scans style files and bans `!important`. Forces CSS styles to follow natural browser rules instead of forcing overrides. |
+| `lint-max-lines.sh` | **Batch Context-Length Auditor**: Scans all files across the project. Flags any file that has grown beyond the 300-line limit. |
+| `lint-morpheme-max.sh` | **Batch Morphological Auditor**: Scans all files and exports across the project. Flags any name that contains four or more words. |
+| `lint-naming.sh` | **Lexical Distribution Mode Verification**: Checks all files added by a branch. Ensures that three-word names do not become the most common naming pattern. |
+| `lint-token-required.sh` | **Design Token Structural Indirection**: Ensures all CSS values use design tokens like `var(--*)`. Flags any hardcoded raw values like `#fff` or `16px`. |
+| `lint-url-version.sh` | **Batch URI Architecture Validator**: Scans the project for version numbers hardcoded in URLs. Flags API routes using `/v1/` or `?version=`. |
 
 ---
 
