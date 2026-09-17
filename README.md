@@ -36,59 +36,13 @@ still caught when an edit bypasses the model.
 
 ## Benefit & Utility: Runtime Steering for LLM Agents
 
-Autonomous Large Language Model agents write computer code quickly.
-However, agents often suffer from **lexical drift** and **architectural entropy**.
-They create giant files, use confusing jargon, and cause **autoregressive error propagation**.
+Autonomous Large Language Model agents write computer code quickly, but they suffer from **lexical drift**, **architectural entropy**, and **autoregressive error propagation**. When an agent makes a mistake early in a task, it builds more broken code on top of that mistake.
 
-This repository provides **deterministic runtime steering** for coding agents:
-- **Protects the Token Budget**: Blocks bad code before the write happens. The agent self-corrects in one turn without wasting prompt tokens on multi-file rollbacks.
-- **Enforces Structural Invariants**: Sets hard mathematical limits ($k \le 3$ morphemes, 300 lines per file, 50 lines per function).
-- **Stops Lexical Drift**: Forces models to use standard ontologies (RFC 7231, RFC 3986, Apple HIG) instead of hallucinated framework terms.
-- **Mitigates Resource Sinks**: Prevents autonomous agents from entering runaway billing loops on write-amplified storage APIs like Cloudflare KV.
-- **Stateless Hermeticity**: Each script is pure POSIX shell with zero external dependencies, running identically across Claude Code, Cursor, Codex, and CI.
-
----
-
-## Example: Closed-Loop Agent Steering
-
-Here is a real-world example of an autonomous LLM agent interacting with `guard-banned-words.sh` via the `hook-pre-tool.sh` interceptor:
-
-### 1. Agent Action Proposal
-The agent attempts to call its `Edit` tool with non-compliant framework jargon:
-
-```json
-{
-  "tool_name": "Edit",
-  "tool_input": {
-    "file_path": "src/components/profile.tsx",
-    "new_string": "export function UserProfileModal() {\n  return <div className=\"modal\">Profile</div>;\n}"
-  }
-}
-```
-
-### 2. PreToolUse Interception & Rejection
-`hook-pre-tool.sh` catches the tool payload before disk state mutation. It runs `guard-banned-words.sh` on the proposed text buffer.
-
-The guard aborts execution with **exit code 2** and prints to `stderr`:
-```text
-BANNED WORD: modal (use dialog) at src/components/profile.tsx:1
-Cardinal rule: shared architecture uses RFC 7231 / RFC 3986 / Apple HIG terms, never domain nouns or framework jargon.
-```
-
-### 3. In-Context Self-Correction
-The diagnostic error message is injected directly into the LLM context window. The agent conditions on the rule violation and emits a corrected tool call in the next turn:
-
-```json
-{
-  "tool_name": "Edit",
-  "tool_input": {
-    "file_path": "src/components/profile.tsx",
-    "new_string": "export function UserProfileDialog() {\n  return <dialog className=\"user-dialog\">Profile</dialog>;\n}"
-  }
-}
-```
-
-The guard evaluates the repaired payload, returns **exit code 0**, and allows the state mutation to complete.
+This repository provides a **deterministic runtime steering harness** that intercepts agent actions before they touch your disk:
+- **How it intercepts**: When an agent proposes a tool call (such as an `Edit` writing `UserProfileModal`), the `PreToolUse` hook passes the proposed text to matching guards. If the code breaks a rule, the guard blocks execution with exit code 2 and outputs a single-line reason to `stderr`.
+- **How the agent self-corrects**: The diagnostic message enters the agent's context window. The agent reads the exact rule violation and repairs its code in the next turn (e.g., rewriting it to use `<dialog>`).
+- **Why this saves tokens**: Traditional linters run late in CI. When late tests fail, an agent burns large amounts of your token budget inspecting git diffs and rewriting multiple files. This harness forces instant zero-shot correction at $t=0$ before disk state mutation.
+- **Stateless Hermeticity**: Every script is an independent, pure POSIX shell executable with zero external dependencies, running identically across Claude Code, Cursor, Codex, and Git pre-commit.
 
 ---
 
@@ -96,30 +50,30 @@ The guard evaluates the repaired payload, returns **exit code 0**, and allows th
 
 | File | Description |
 |---|---|
-| `guard-banned-words.sh` | **Lexical Space Projection**: Author-time blocking guard enforcing RFC 7231, RFC 3986, and Apple Human Interface Guidelines (HIG) semantic and ARIA terms. Projects out framework jargon (e.g., `navbar` → `nav`, `sidebar` → `aside`, `modal`/`popup` → `dialog`, `card` → `row`, `hero` → `header`, `shelf` → `section`, `feed` → `list`). Stops LLMs from hallucinating non-standard UI component names before writing to disk (exit 2). |
-| `guard-bash-write.sh` | **Out-of-Band State Mutation Suppression**: Command-line execution guard intercepting unsafe shell redirections (`>`, `>>`) and in-place stream modifications (`sed -i`, `perl -i`, `awk -i`). Forces agents to use audited tool APIs (`Write`, `Edit`) rather than bypassing author-time guards through raw terminal writes (exit 2). |
-| `guard-cloudflare-kv.sh` | **Unbounded Resource-Sink Mitigation**: Author-time blocking guard that rejects Cloudflare Workers KV namespace bindings (`[[kv_namespaces]]`) and runtime API invocations (`.get()`, `.put()`, `.delete()`). Prevents runaway agentic billing loops caused by write-amplified storage ($5/million writes) (exit 2). |
-| `guard-deploy-push.sh` | **Production Deployment Invariants**: Release command guard blocking production deploys from dirty working trees, non-default branches, or local commits ahead of upstream. Allows named non-production environments (`--env staging`, `deploy:preview`) while guaranteeing what ships matches audited version control (exit 2). |
-| `guard-diff-size.sh` | **Generative Trajectory Drift Regularization**: Branch-level boundary guard that bounds total line-delta entropy on active feature branches. Prevents autonomous agents from runaway generative rewrites, forcing incremental, reviewable commits (exit 2). |
-| `guard-direct-style.sh` | **Imperative DOM Mutation Suppression**: Author-time guard banning direct JavaScript style property mutations (`element.style.x =`). Mandates declarative CSS classes, data attributes, and CSS custom properties (`var(--*)`) to preserve style encapsulation and prevent specificity drift (exit 2). |
-| `guard-function-size.sh` | **Cognitive & Cyclomatic Complexity Ceiling**: Author-time structural guard enforcing a hard ceiling of 50 lines per function block. Prevents LLMs from generating monolithic procedures, forcing modular decomposition and clean unit testability (exit 2). |
-| `guard-max-lines.sh` | **Context-Window Saturation Bound**: Author-time structural guard enforcing a hard ceiling of 300 lines per file. Keeps files within a single cognitive horizon, preventing context-window pollution and attention degradation in downstream agent sessions (exit 2). |
-| `guard-morpheme-max.sh` | **Morphological Sparsity Ceiling**: Author-time structural guard limiting file basenames, exported functions, and config keys to at most 3 morpheme word units (split on `-` or `_`). Exempts standard uppercase environment variables while stopping LLM compound-naming bloat (exit 2). |
-| `guard-name-words.sh` | **Lexical Parsimony Ladder**: Author-time creation guard enforcing the naming ladder for new files: 1 word preferred, 2 fine, 3 announced. Emits an advisory on stdout/stderr when a 3-word name is introduced to guide agent self-correction before committing (exit 0). |
-| `guard-pull-request.sh` | **Falsifiable Task-Completion Verification**: Pull request command guard inspecting `gh pr create` and `gh pr edit`. Requires the PR description to include at least one Markdown task checkbox (`- [ ]` or `- [x]`), ensuring agents state falsifiable acceptance criteria for what "done" means (exit 2). |
-| `guard-push-main.sh` | **Default Branch Invariant Protection**: Git command guard intercepting `git push` commands targeting default branches (`main`, `master`). Forces human developers and autonomous agents to work on feature branches and submit pull requests (exit 2). |
-| `guard-url-version.sh` | **Protocol Versioning Conformance**: Author-time guard enforcing the universal rule that API versioning belongs strictly in HTTP content negotiation headers (`Accept-Version`), never hardcoded in URL paths (`/v1/`) or query parameters (`?version=`) (exit 2). |
-| `hook-post-edit.sh` | **PostToolUse Advisory Feedback**: Platform dispatcher wired into agent `PostToolUse` lifecycle events (e.g. Claude Code, Cursor). Immediately runs fast batch linters on saved files, feeding non-blocking advisory diagnostics directly into the agent's context window (exit 0). |
-| `hook-pre-commit.sh` | **Diff-Aware Commit Boundary Gate**: Universal Git pre-commit hook that runs line-level checks (`lint-banned-words`, `lint-important-css`, `lint-token-required`) strictly on staged diffs. Blocks new invariant violations without causing legacy deadlocks on pre-existing code debt (exit 1). |
-| `hook-pre-tool.sh` | **PreToolUse Policy Interceptor**: Author-time platform dispatcher wired into agent `PreToolUse` hooks (Claude Code, Cursor, Codex). Intercepts proposed `Edit`, `Write`, and `Bash` tool payloads, running corresponding file and command guards before disk state mutation occurs (exit 2). |
-| `lint-banned-words.sh` | **Global Lexical Space Auditor**: Batch static analysis counterpart to `guard-banned-words.sh`. Scans tracked source code for banned framework jargon and anti-patterns, verifying adherence to RFC 7231, RFC 3986, and Apple HIG terminology across the entire codebase (exit 1). |
-| `lint-dead-imports.sh` | **Static Dependency Graph Integrity**: Batch static analysis linter that validates all relative TypeScript and JavaScript module imports (`./`, `../`). Flags broken relative import paths and missing module targets across the repository (exit 1). |
-| `lint-important-css.sh` | **Cascade Determinism Enforcement**: Batch stylesheet linter that strictly bans `!important` across CSS, SCSS, LESS, and CSS-in-JS templates. Preserves predictable cascade layers and eliminates CSS specificity escalation wars (exit 1). |
-| `lint-max-lines.sh` | **Batch Context-Length Auditor**: Batch counterpart to `guard-max-lines.sh`. Scans all tracked text files across the project and reports every file that exceeds the 300-line ceiling (exit 1). |
-| `lint-morpheme-max.sh` | **Batch Morphological Auditor**: Batch counterpart to `guard-morpheme-max.sh`. Scans all repository source files and exported function identifiers, reporting any names that exceed the 3-word morpheme ceiling (exit 1). |
-| `lint-naming.sh` | **Lexical Distribution Mode Verification**: Statistical branch linter checking the word-count distribution (1, 2, 3 words) of all files added by a feature branch. Enforces that 3-word names must not be the statistical mode among added files (exit 1). |
-| `lint-token-required.sh` | **Design Token Structural Indirection**: Batch style linter requiring all color, length, font-weight, and opacity declarations to reference CSS custom properties (`var(--*)`). Flags raw magic literals (`#fff`, `16px`, `rgb(...)`) to ensure 100% tokenized design systems (exit 1). |
-| `lint-url-version.sh` | **Batch URI Architecture Validator**: Batch counterpart to `guard-url-version.sh`. Scans the codebase for hardcoded API versions embedded in URL strings, ensuring versioning remains in HTTP request headers (exit 1). |
+| `guard-banned-words.sh` | **Lexical Space Projection**: Author-time blocking guard enforcing RFC 7231, RFC 3986, and Apple Human Interface Guidelines (HIG) semantic and ARIA terms over framework jargon. Example: when an agent writes `UserProfileModal` or `<div class="card">`, it is blocked with exit 2, forcing immediate self-correction to native `<dialog>` or `row`. |
+| `guard-bash-write.sh` | **Out-of-Band State Mutation Suppression**: Command guard blocking shell writes. Example: when an agent attempts `cat <<EOF > file` or `sed -i` to bypass author-time hooks, the command is blocked with exit 2, forcing the agent through auditable `Write`/`Edit` tool APIs. |
+| `guard-cloudflare-kv.sh` | **Unbounded Resource-Sink Mitigation**: Author-time guard banning Cloudflare Workers KV bindings (`[[kv_namespaces]]`) and runtime calls (`.get()`, `.put()`). Example: catches and blocks an agent adding KV storage to a worker before runaway write costs ($5/1M writes) occur (exit 2). |
+| `guard-deploy-push.sh` | **Production Deployment Invariants**: Release guard blocking production deploys from dirty or unpushed trees. Example: blocks an agent running `wrangler deploy` while local feature commits are unpushed, while allowing named preview environments (`--env staging`) (exit 2). |
+| `guard-diff-size.sh` | **Generative Trajectory Drift Regularization**: Bounds total line-delta entropy on active feature branches. Example: blocks an agent when a single feature branch attempts a monolithic 500-line rewrite, forcing smaller, verifiable review increments (exit 2). |
+| `guard-direct-style.sh` | **Imperative DOM Mutation Suppression**: Blocks direct JS style mutations (`element.style.x =`). Example: catches an agent writing `el.style.display = "none"`, forcing declarative CSS classes, data attributes, or design tokens instead (exit 2). |
+| `guard-function-size.sh` | **Cognitive & Cyclomatic Complexity Ceiling**: Enforces a 50-line maximum per function. Example: halts an agent writing a sprawling 80-line helper, forcing decomposition into short, single-purpose functions (exit 2). |
+| `guard-max-lines.sh` | **Context-Window Saturation Bound**: Enforces a 300-line ceiling per file. Example: rejects an agent write that would push a file to 350 lines, keeping files within a single cognitive window and preventing context bloat (exit 2). |
+| `guard-morpheme-max.sh` | **Morphological Sparsity Ceiling**: Limits file basenames, functions, and config keys to 3 morphemes (split on `-` or `_`). Example: blocks `render-user-profile-header-card.tsx` (5 morphemes) at author time, while exempting uppercase ENV_VARS (exit 2). |
+| `guard-name-words.sh` | **Lexical Parsimony Ladder**: Author-time ladder for new files (1 word preferred, 2 fine, 3 announced). Example: when an agent creates `user-menu-list.ts` (3 words), it emits an advisory warning to encourage simpler naming (exit 0). |
+| `guard-pull-request.sh` | **Falsifiable Task-Completion Verification**: Command guard on `gh pr create`. Example: blocks an agent opening a PR with a vague text summary, requiring at least one task-list checkbox (`- [ ]`) defining falsifiable acceptance criteria (exit 2). |
+| `guard-push-main.sh` | **Default Branch Invariant Protection**: Command guard on `git push`. Example: blocks an agent running `git push origin main`, forcing the agent to push a feature branch and open a pull request instead (exit 2). |
+| `guard-url-version.sh` | **Protocol Versioning Conformance**: Enforces API versions in HTTP content negotiation headers (`Accept-Version`), never URL paths. Example: blocks an agent writing `/api/v1/users` or `?version=2`, keeping URLs version-free (exit 2). |
+| `hook-post-edit.sh` | **PostToolUse Advisory Feedback**: Runtime dispatcher running fast linters on saved files. Example: after an agent saves a file, it reports styling and naming advisories directly into the context window without blocking execution (exit 0). |
+| `hook-pre-commit.sh` | **Diff-Aware Commit Boundary Gate**: Pre-commit hook checking staged diffs for banned terms, raw styles, and length limits. Example: blocks `git commit` if the staged changes introduce a banned word, while ignoring pre-existing violations in legacy code (exit 1). |
+| `hook-pre-tool.sh` | **PreToolUse Policy Interceptor**: Agent middleware intercepting `Write`, `Edit`, and `Bash` tool payloads. Example: inspects proposed file content in memory and executes matching guards before any byte is written to disk (exit 2). |
+| `lint-banned-words.sh` | **Global Lexical Space Auditor**: Batch static analysis checking whole codebases against RFC 7231, RFC 3986, and Apple HIG terms. Example: scans repository files in CI and flags all occurrences of component jargon like `Sidebar` or `Modal` (exit 1). |
+| `lint-dead-imports.sh` | **Static Dependency Graph Integrity**: Batch import validator. Example: parses all relative `./` and `../` imports across TypeScript/JS files and reports any import pointing to a missing or deleted file (exit 1). |
+| `lint-important-css.sh` | **Cascade Determinism Enforcement**: Batch stylesheet linter banning `!important`. Example: scans CSS and styled-components, failing the build if `!important` is used to override specificity (exit 1). |
+| `lint-max-lines.sh` | **Batch Context-Length Auditor**: Scans the whole repository for oversized files. Example: reports every source file exceeding the 300-line limit to maintain clean modular boundaries (exit 1). |
+| `lint-morpheme-max.sh` | **Batch Morphological Auditor**: Scans files and exported functions for compound naming bloat. Example: flags any exported function with 4+ morphemes across the codebase (exit 1). |
+| `lint-naming.sh` | **Lexical Distribution Mode Verification**: Branch-level statistical distribution check. Example: ensures that 3-word file names do not become the most common naming pattern among files added by a feature branch (exit 1). |
+| `lint-token-required.sh` | **Design Token Structural Indirection**: Enforces design token usage. Example: flags raw color `#1a1a1a` or spacing `16px`, requiring tokens like `var(--color-bg)` and `var(--space-md)` (exit 1). |
+| `lint-url-version.sh` | **Batch URI Architecture Validator**: Batch scanner for URL versioning anti-patterns. Example: scans API clients and routes, reporting any URL paths containing `/v1/` or `/v2/` (exit 1). |
 
 ---
 
