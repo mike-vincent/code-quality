@@ -37,6 +37,49 @@ Every file is an independent, hermetic POSIX executable. No file imports or sour
 
 ---
 
+---
+
+## Example: Closed-Loop Agent Steering
+
+Here is a real-world example of an autonomous LLM agent interacting with `guard-banned-words.sh` via the `hook-pre-tool.sh` interceptor:
+
+### 1. Agent Action Proposal
+The agent attempts to call its `Edit` tool with non-compliant framework jargon:
+
+```json
+{
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "src/components/profile.tsx",
+    "new_string": "export function UserProfileModal() {\n  return <div className=\"modal\">Profile</div>;\n}"
+  }
+}
+```
+
+### 2. PreToolUse Interception & Rejection
+`hook-pre-tool.sh` catches the tool payload before disk state mutation. It runs `guard-banned-words.sh` on the proposed text buffer.
+
+The guard aborts execution with **exit code 2** and prints to `stderr`:
+```text
+BANNED WORD: modal (use dialog) at src/components/profile.tsx:1
+Cardinal rule: shared architecture uses RFC 7231 / RFC 3986 / Apple HIG terms, never domain nouns or framework jargon.
+```
+
+### 3. In-Context Self-Correction
+The diagnostic error message is injected directly into the LLM context window. The agent conditions on the rule violation and emits a corrected tool call in the next turn:
+
+```json
+{
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "src/components/profile.tsx",
+    "new_string": "export function UserProfileDialog() {\n  return <dialog className=\"user-dialog\">Profile</dialog>;\n}"
+  }
+}
+```
+
+The guard evaluates the repaired payload, returns **exit code 0**, and allows the state mutation to complete.
+
 ## Execution & Usage
 
 Every script is an independent executable. Run any guard or linter directly from your shell:
