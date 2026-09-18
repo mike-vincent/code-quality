@@ -14,7 +14,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # File guards run against a single edited file. Command guards inspect a
 # proposed shell command. Both groups live flat in HERE.
-FILE_GUARDS=(guard-banned-words guard-morpheme-max guard-max-lines guard-function-size guard-direct-style guard-cloudflare-kv guard-url-version)
+FILE_GUARDS=(guard-banned-words guard-morpheme-max guard-max-lines guard-function-size guard-direct-style guard-cloudflare-kv guard-cloudflare-assets guard-edge-shield guard-url-version)
 CMD_GUARDS=(guard-push-main guard-deploy-push guard-pull-request guard-bash-write guard-diff-size)
 
 # Guards that only apply when a file is being CREATED. A name costs nothing to
